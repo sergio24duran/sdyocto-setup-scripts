@@ -66,20 +66,24 @@ cd "${PROJECT_PATH}" || { echo "❌ Failed to change directory to ${PROJECT_PATH
 # ================================
 # CLONE OR ADD SUBMODULES
 # ================================
+PARENT_REPO="$(dirname "$PROJECT_PATH")"
+
 if [ "$USE_GIT_SUBMODULES" = true ]; then
-    echo "🔗 Adding git submodules POKY & META-RASPBERRYPI..."
-    # Check if current dir is a git repo
-    if [ ! -d ".git" ]; then
-        echo "❌ Current directory is not a git repository. Please init or clone it first."
-        rm -rf "${PROJECT_PATH}"
+    echo "build/" > .gitignore
+    echo "🔗 Adding git submodules POKY & META-RASPBERRYPI in $PROJECT_PATH ..."
+
+    # Check if parent dir is a git repo
+    if [ ! -d "$PARENT_REPO/.git" ] && [ ! -f "$PARENT_REPO/.git" ]; then
+        echo "❌ Parent directory is not a git repository. Please init or clone it first."
         exit 1
     fi
+
     git submodule add -b $YOCTO_VERSION git://git.yoctoproject.org/poky.git
     git submodule add -b $YOCTO_VERSION https://git.yoctoproject.org/meta-raspberrypi
 else
-    echo "📥 Cloning POKY (branch: $YOCTO_VERSION)..."
+    echo "📥 Cloning POKY & META-RASPBERRYPI directly into $PROJECT_PATH ..."
+
     git clone -b $YOCTO_VERSION git://git.yoctoproject.org/poky.git
-    echo "📥 Cloning META-RASPBERRYPI (branch: $YOCTO_VERSION)..."
     git clone -b $YOCTO_VERSION https://git.yoctoproject.org/meta-raspberrypi
 fi
 
