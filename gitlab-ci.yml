@@ -1,0 +1,22 @@
+stages:
+  - mirror
+
+mirror_develop_to_github:
+  stage: mirror
+  image: alpine:latest
+  only:
+    - develop
+  before_script:
+    - apk add --no-cache git
+    # Set up user for automatic commits (required for pushes)
+    - git config --global user.email "ci@gitlab.com"
+    - git config --global user.name "GitLab CI"
+  script:
+    # Remove GitHub remote if it already exists
+    - git remote remove github || true
+    # Add GitHub remote using variables
+    - git remote add github https://oauth2:${GITHUB_TOKEN}@${GITHUB_REPO_URL#https://}
+    # Fetch the latest changes from GitLab
+    - git fetch origin develop
+    # Push only the develop branch to GitHub
+    - git push --force github develop

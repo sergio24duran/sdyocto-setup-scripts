@@ -92,13 +92,28 @@ fi
 # ================================
 echo "📂 Copying env script and conf directory to ${PROJECT_PATH}..."
 
-# Copy raspi-env.sh
-ENV_SRC="${SCRIPT_DIR}/raspi-scripts/raspi-env.sh"
-if [[ ! -f "${ENV_SRC}" ]]; then
-  echo "❌ File not found: ${ENV_SRC}" >&2
+# Copy raspi-env.sh and scripts directory
+RASPISCRIPTS_SRC="${SCRIPT_DIR}/raspi-scripts"
+if [[ ! -d "${RASPISCRIPTS_SRC}" ]]; then
+  echo "❌ Directory not found: ${RASPISCRIPTS_SRC}" >&2
   exit 1
 fi
-cp "${ENV_SRC}" "${PROJECT_PATH}/" || { echo "❌ Error when trying to copy raspi-env.sh" >&2; exit 1; }
+
+echo "📂 Copying raspi-env.sh and scripts/ to ${PROJECT_PATH}..."
+
+# Copy the main env file
+if [[ ! -f "${RASPISCRIPTS_SRC}/raspi-env.sh" ]]; then
+  echo "❌ File not found: ${RASPISCRIPTS_SRC}/raspi-env.sh" >&2
+  exit 1
+fi
+cp "${RASPISCRIPTS_SRC}/raspi-env.sh" "${PROJECT_PATH}/" || { echo "❌ Error copying raspi-env.sh" >&2; exit 1; }
+
+# Copy the scripts folder (recursively)
+if [[ -d "${RASPISCRIPTS_SRC}/scripts" ]]; then
+  cp -r "${RASPISCRIPTS_SRC}/scripts" "${PROJECT_PATH}/" || { echo "❌ Error copying scripts directory" >&2; exit 1; }
+else
+  echo "⚠️ Warning: scripts/ folder not found under ${RASPISCRIPTS_SRC}"
+fi
 
 # Copy conf directory
 CONF_SRC="${SCRIPT_DIR}/raspi-conf/conf"
