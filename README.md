@@ -1,98 +1,126 @@
 # sdyocto-setup-scripts
 
-## 🗂️ Branching Strategy
+Minimal Yocto Linux image bootstrap and SD flashing helper for Raspberry Pi (Kirkstone).
 
-- `/develop` — default branch, contains the latest development changes  
-- `/main` — stable branch for production-ready releases  
-- `/feature/xxx` — development of new features  
-- `/fix/xxx` — bug fixes or small corrections  
-- `/release/xxx` — version preparation branch
+This repository provides a minimal workflow to:
+- bootstrap a Yocto project with Poky and meta-raspberrypi,
+- provide a reusable environment script for building,
+- prepare built .wic images for flashing,
+- flash images to SD cards using bmaptool (or dd fallback).
 
+Quick links to key files:
+- Main project bootstrap script: [`create-minraspi-yoctoproject.sh`](create-minraspi-yoctoproject.sh)  
+- Yocto environment helper: [`raspi-scripts/raspi-env.sh`](raspi-scripts/raspi-env.sh)  
+- Prepare image script: [`raspi-scripts/scripts/prepare-image.sh`](raspi-scripts/scripts/prepare-image.sh)  
+- Flash SD script: [`raspi-scripts/scripts/flash-sd.sh`](raspi-scripts/scripts/flash-sd.sh)  
+- Preconfigured Yocto confs: [`raspi-conf/conf/local.conf`](raspi-conf/conf/local.conf), [`raspi-conf/conf/bblayers.conf`](raspi-conf/conf/bblayers.conf)  
+- CI mirror job: [`.gitlab-ci.yml`](.gitlab-ci.yml)
+- Recommended meta-layer to add:
+    - Github: [meta-sdraspi](https://github.com/sergio24duran/meta-sdraspi)
+    - Gitlab: [meta-sdraspi](https://gitlab.com/sdyocto/meta-sdraspi.git)
 
-## Getting started
+Requirements
+- Linux host (Ubuntu/Debian/Fedora tested)
+- git, bash, bunzip2
+- bmaptool (recommended) or dd
+- Yocto build prerequisites (see Yocto Project Quick Start)
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+Repository layout
+- raspi-scripts/
+  - raspi-env.sh — environment helper to source before building ([open file](raspi-scripts/raspi-env.sh))
+  - scripts/
+    - prepare-image.sh — find latest .wic.bz2, decompress to images/<timestamp> ([open file](raspi-scripts/scripts/prepare-image.sh))
+    - flash-sd.sh — flash decompressed .wic to an SD device ([open file](raspi-scripts/scripts/flash-sd.sh))
+- raspi-conf/conf/
+  - local.conf — base local.conf tailored for Raspberry Pi and qemu ([open file](raspi-conf/conf/local.conf))
+  - bblayers.conf — minimal bblayers list pointing to poky & meta-raspberrypi ([open file](raspi-conf/conf/bblayers.conf))
+- create-minraspi-yoctoproject.sh — bootstrap script to create a new project and copy env/conf & scripts files ([open file](create-minraspi-yoctoproject.sh))
+- .gitlab-ci.yml — CI job to mirror develop branch to GitHub ([open file](.gitlab-ci.yml)). Only used to maintain gihub repo mirror from gitlab original repo.
 
-## Add your files
+Usage
 
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
+1) Create a new Yocto project
+- Preferred usage (absolute path required), sudo or normal user depending on your environment:
+    ```bash
+    ./create-minraspi-yoctoproject.sh -p /absolute/path/to/yocto-project
+    ```
+- Optional: add -g to use git submodules instead of cloning:
+    ```bash
+    ./create-minraspi-yoctoproject.sh -p /absolute/path/to/yocto-project -g
+    ```
 
-```
-cd existing_repo
-git remote add origin https://gitlab.com/sdyocto/sdyocto-setup-scripts.git
-git branch -M main
-git push -uf origin main
-```
+What the script does:
+- creates the project dir
+- clones (or adds submodules) Poky and meta-raspberrypi (Kirkstone branch)
+- copies `raspi-env.sh` and `scripts/`
+- copies `conf/` (local.conf & bblayers.conf)
 
-## Integrate with your tools
+2) Configure the build environment
+    ```bash
+    cd /absolute/path/to/yocto-project
+    source raspi-env.sh -m <machine>
+    ```
+    Default machine is `qemux86-64`, example:
+    ```bash
+    source raspi-env.sh -m raspberrypi3
+    ```
 
-- [ ] [Set up project integrations](https://gitlab.com/sdyocto/sdyocto-setup-scripts/-/settings/integrations)
+Notes:
+- The environment script is designed to be sourced (using `source`or `.`): see [`raspi-scripts/raspi-env.sh`](raspi-scripts/raspi-env.sh)
+- Valid MACHINE values: `raspberrypi3`, `qemux86-64`
+- The script links your project conf files into the build directory and sets PATH/BBPATH for BitBake
 
-## Collaborate with your team
+3) Build an image
+- Example:
+    ```bash
+    bitbake core-image-minimal
+    ```
+    or
+    ```bash
+    bitbake sdraspi-min-image
+    ```
 
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+- Useful BitBake commands are printed by `raspi-env.sh` and include build/clean/sdk commands.
 
-## Test and Deploy
+4) Prepare the latest image for flashing
+- From your project (after build), run:
+    ```bash
+    ./scripts/prepare-image.sh -i <image-name>
+    ```
+- Example:
+    ```bash
+    ./scripts/prepare-image.sh -i core-image-minimal
+    ```
 
-Use the built-in continuous integration in GitLab.
+What it does:
+- looks for the latest file matching `${IMAGE_NAME}-raspberrypi3-*.rootfs.wic.bz2` in the build deploy folder
+- extracts the timestamp from the filename and creates .../yocto-project/images/timestamp
+- decompresses the .wic.bz2 to the new folder
+- copies the .bmap if available and prints flashing instructions  
+(see [`raspi-scripts/scripts/prepare-image.sh`](raspi-scripts/scripts/prepare-image.sh))
 
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+5) Flash the SD card
+- Example:
+    ```bash
+    sudo ./scripts/flash-sd.sh -t .../path/to/images/timestamp -d /dev/sdX
+    ```
 
-***
+What it does:
+- unmounts any mounted partitions on device
+- uses `bmaptool copy <image.wic> /dev/sdX` (recommended)
+- falls back to `dd` if no .bmap is available (prepare-image prints both options)  
+(see [`raspi-scripts/scripts/flash-sd.sh`](raspi-scripts/scripts/flash-sd.sh))
 
-# Editing this README
+Safety & tips
+- Always unmount partitions on the SD device before flashing and make a back-up of the data if you don't want to lose it (remember to umount them after back-up).
+- Double-check the device path (e.g., /dev/sdX) to avoid overwriting your host disk.
+- Keep DL_DIR and SSTATE_DIR persistent across builds to speed up subsequent builds (configured in `local.conf` if you choose).
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+Customization
+- Adjust `raspi-conf/conf/local.conf` and `bblayers.conf` to add layers, change MACHINE defaults, or tweak output directories. ([open local.conf](raspi-conf/conf/local.conf)) ([open bblayers.conf](raspi-conf/conf/bblayers.conf))
 
-## Suggestions for a good README
+License
+- MIT (as stated in repository)
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
-
-## Name
-Choose a self-explaining name for your project.
-
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
-
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
-
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
-
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
-
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
-
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
-
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
-
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
-
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
-
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
-
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
-
-## License
-For open source projects, say how it is licensed.
-
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+Ower/Maintainer
+- Sergio Durán Martín — GitHub
