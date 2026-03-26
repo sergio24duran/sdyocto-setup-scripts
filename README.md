@@ -67,7 +67,7 @@ What the script does:
 
 Notes:
 - The environment script is designed to be sourced (using `source`or `.`): see [`raspi-scripts/raspi-env.sh`](raspi-scripts/raspi-env.sh)
-- Valid MACHINE values: `raspberrypi3`, `qemux86-64`
+- Valid MACHINE values: `qemux86-64`, `raspberrypi3`, `raspberrypi3-64`, `raspberrypi4`, `raspberrypi4-64`
 - The script links your project conf files into the build directory and sets PATH/BBPATH for BitBake
 
 3) Build an image
@@ -93,7 +93,7 @@ Notes:
     ```
 
 What it does:
-- looks for the latest file matching `${IMAGE_NAME}-raspberrypi3-*.rootfs.wic.bz2` in the build deploy folder
+- looks for the latest file matching `${IMAGE_NAME}-${MACHINE}-*.rootfs.wic.bz2` in the build deploy folder
 - extracts the timestamp from the filename and creates .../yocto-project/images/timestamp
 - decompresses the .wic.bz2 to the new folder
 - copies the .bmap if available and prints flashing instructions  
