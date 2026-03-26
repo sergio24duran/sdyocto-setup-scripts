@@ -8,7 +8,7 @@ if [[ "${BASH_SOURCE[0]}" == "${0}" ]]; then
 fi
 
 # Valid MACHINEs
-VALID_MACHINES=("qemux86-64" "raspberrypi3")
+VALID_MACHINES=("qemux86-64" "raspberrypi3" "raspberrypi3-64" "raspberrypi4" "raspberrypi4-64")
 MACHINE="qemux86-64"  # default
 
 # Reset OPTIND and parse options on source
@@ -77,6 +77,9 @@ fi
 # Ensure BitBake uses these variables
 export BB_ENV_PASSTHROUGH_ADDITIONS="MACHINE"
 # export BB_ENV_PASSTHROUGH_ADDITIONS="${BB_ENV_PASSTHROUGH_ADDITIONS} MORE_VARS"
+
+# Remove miniconda bin from path in case it is there (it causes conflicts with bitbake)
+export PATH="${PATH//'/tools/miniconda/bin:'/}"
 
 # ================================
 # FINAL INFO
