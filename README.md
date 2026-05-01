@@ -1,126 +1,239 @@
 # sdyocto-setup-scripts
 
-Minimal Yocto Linux image bootstrap and SD flashing helper for Raspberry Pi (Kirkstone).
+Bootstrap scripts for creating minimal Yocto projects for different boards.
+Clone this repo, run `setup.sh` for your board, and get a ready-to-build Yocto
+project with the correct layers, configuration, and helper scripts.
 
-This repository provides a minimal workflow to:
-- bootstrap a Yocto project with Poky and meta-raspberrypi,
-- provide a reusable environment script for building,
-- prepare built .wic images for flashing,
-- flash images to SD cards using bmaptool (or dd fallback).
+## Supported boards
 
-Quick links to key files:
-- Main project bootstrap script: [`create-minraspi-yoctoproject.sh`](create-minraspi-yoctoproject.sh)  
-- Yocto environment helper: [`raspi-scripts/raspi-env.sh`](raspi-scripts/raspi-env.sh)  
-- Prepare image script: [`raspi-scripts/scripts/prepare-image.sh`](raspi-scripts/scripts/prepare-image.sh)  
-- Flash SD script: [`raspi-scripts/scripts/flash-sd.sh`](raspi-scripts/scripts/flash-sd.sh)  
-- Preconfigured Yocto confs: [`raspi-conf/conf/local.conf`](raspi-conf/conf/local.conf), [`raspi-conf/conf/bblayers.conf`](raspi-conf/conf/bblayers.conf)  
-- CI mirror job: [`.gitlab-ci.yml`](.gitlab-ci.yml)
-- Recommended meta-layer to add:
-    - Github: [meta-sdraspi](https://github.com/sergio24duran/meta-sdraspi)
-    - Gitlab: [meta-sdraspi](https://gitlab.com/sdyocto/meta-sdraspi.git)
+| Board | ID | Yocto branch | Meta-layer |
+|-------|----|-------------|------------|
+| Raspberry Pi 3/4 | `raspi` | kirkstone | [meta-raspberrypi](https://git.yoctoproject.org/meta-raspberrypi) |
+| Radxa Dragon Q6A | `radxa-dragon-q6a` | scarthgap | [meta-sdradxa](https://github.com/sergio24duran/meta-sdradxa) |
 
-Requirements
-- Linux host (Ubuntu/Debian/Fedora tested)
-- git, bash, bunzip2
-- bmaptool (recommended) or dd
-- Yocto build prerequisites (see Yocto Project Quick Start)
+## Quick start
 
-Repository layout
-- raspi-scripts/
-  - raspi-env.sh — environment helper to source before building ([open file](raspi-scripts/raspi-env.sh))
-  - scripts/
-    - prepare-image.sh — find latest .wic.bz2, decompress to images/<timestamp> ([open file](raspi-scripts/scripts/prepare-image.sh))
-    - flash-sd.sh — flash decompressed .wic to an SD device ([open file](raspi-scripts/scripts/flash-sd.sh))
-- raspi-conf/conf/
-  - local.conf — base local.conf tailored for Raspberry Pi and qemu ([open file](raspi-conf/conf/local.conf))
-  - bblayers.conf — minimal bblayers list pointing to poky & meta-raspberrypi ([open file](raspi-conf/conf/bblayers.conf))
-- create-minraspi-yoctoproject.sh — bootstrap script to create a new project and copy env/conf & scripts files ([open file](create-minraspi-yoctoproject.sh))
-- .gitlab-ci.yml — CI job to mirror develop branch to GitHub ([open file](.gitlab-ci.yml)). Only used to maintain gihub repo mirror from gitlab original repo.
+### 1. Clone this repository
 
-Usage
+```bash
+git clone https://github.com/sergio24duran/sdyocto-setup-scripts.git
+cd sdyocto-setup-scripts
+```
 
-1) Create a new Yocto project
-- Preferred usage (absolute path required), sudo or normal user depending on your environment:
-    ```bash
-    ./create-minraspi-yoctoproject.sh -p /absolute/path/to/yocto-project
-    ```
-- Optional: add -g to use git submodules instead of cloning:
-    ```bash
-    ./create-minraspi-yoctoproject.sh -p /absolute/path/to/yocto-project -g
-    ```
+### 2. List available boards
 
-What the script does:
-- creates the project dir
-- clones (or adds submodules) Poky and meta-raspberrypi (Kirkstone branch)
-- copies `raspi-env.sh` and `scripts/`
-- copies `conf/` (local.conf & bblayers.conf)
+```bash
+./setup.sh -l
+```
 
-2) Configure the build environment
-    ```bash
-    cd /absolute/path/to/yocto-project
-    source raspi-env.sh -m <machine>
-    ```
-    Default machine is `qemux86-64`, example:
-    ```bash
-    source raspi-env.sh -m raspberrypi3
-    ```
+### 3. Create a Yocto project
 
-Notes:
-- The environment script is designed to be sourced (using `source`or `.`): see [`raspi-scripts/raspi-env.sh`](raspi-scripts/raspi-env.sh)
-- Valid MACHINE values: `qemux86-64`, `raspberrypi3`, `raspberrypi3-64`, `raspberrypi4`, `raspberrypi4-64`
-- The script links your project conf files into the build directory and sets PATH/BBPATH for BitBake
+The script detects automatically whether the target path is a git repository:
 
-3) Build an image
-- Example:
-    ```bash
-    bitbake core-image-minimal
-    ```
-    or
-    ```bash
-    bitbake sdraspi-min-image
-    ```
+- **Git repository detected** (recommended): layers are added as **git
+  submodules**. This gives you full reproducibility — anyone can recreate the
+  exact same project with `git clone --recurse-submodules`.
+- **No git repository**: layers are cloned as standalone repositories. Good for
+  quick tests or throwaway builds.
 
-- Useful BitBake commands are printed by `raspi-env.sh` and include build/clean/sdk commands.
+#### Professional workflow (with submodules)
 
-4) Prepare the latest image for flashing
-- From your project (after build), run:
-    ```bash
-    ./scripts/prepare-image.sh -i <image-name>
-    ```
-- Example:
-    ```bash
-    ./scripts/prepare-image.sh -i core-image-minimal
-    ```
+This is the recommended approach for any project you intend to keep or share:
 
-What it does:
-- looks for the latest file matching `${IMAGE_NAME}-${MACHINE}-*.rootfs.wic.bz2` in the build deploy folder
-- extracts the timestamp from the filename and creates .../yocto-project/images/timestamp
-- decompresses the .wic.bz2 to the new folder
-- copies the .bmap if available and prints flashing instructions  
-(see [`raspi-scripts/scripts/prepare-image.sh`](raspi-scripts/scripts/prepare-image.sh))
+```bash
+# 1. Create a repo on GitHub (empty or with a README)
+# 2. Clone it locally
+git clone https://github.com/youruser/my-yocto-project.git
+# 3. Run setup.sh pointing to the cloned repo
+./setup.sh -b radxa-dragon-q6a -p /home/user/my-yocto-project
+# 4. Commit and push
+cd /home/user/my-yocto-project
+git add -A
+git commit -m "Add Yocto layers and configuration for Radxa Dragon Q6A"
+git push
+```
 
-5) Flash the SD card
-- Example:
-    ```bash
-    sudo ./scripts/flash-sd.sh -t .../path/to/images/timestamp -d /dev/sdX
-    ```
+Now anyone can reproduce your project:
 
-What it does:
-- unmounts any mounted partitions on device
-- uses `bmaptool copy <image.wic> /dev/sdX` (recommended)
-- falls back to `dd` if no .bmap is available (prepare-image prints both options)  
-(see [`raspi-scripts/scripts/flash-sd.sh`](raspi-scripts/scripts/flash-sd.sh))
+```bash
+git clone --recurse-submodules https://github.com/youruser/my-yocto-project.git
+```
 
-Safety & tips
-- Always unmount partitions on the SD device before flashing and make a back-up of the data if you don't want to lose it (remember to umount them after back-up).
-- Double-check the device path (e.g., /dev/sdX) to avoid overwriting your host disk.
-- Keep DL_DIR and SSTATE_DIR persistent across builds to speed up subsequent builds (configured in `local.conf` if you choose).
+#### Quick start (standalone clones)
 
-Customization
-- Adjust `raspi-conf/conf/local.conf` and `bblayers.conf` to add layers, change MACHINE defaults, or tweak output directories. ([open local.conf](raspi-conf/conf/local.conf)) ([open bblayers.conf](raspi-conf/conf/bblayers.conf))
+For fast experiments where reproducibility is not needed:
 
-License
-- MIT (as stated in repository)
+```bash
+./setup.sh -b raspi -p /home/user/yocto-raspi
+```
 
-Ower/Maintainer
-- Sergio Durán Martín — GitHub
+The directory does not need to exist — the script creates it.
+
+### 4. Build
+
+```bash
+cd /home/user/yocto-radxa
+source env.sh -m <machine>
+bitbake <image>
+```
+
+Each board has a default machine and image. After running `setup.sh`, the output
+tells you the exact commands.
+
+| Board | Source command | Build command |
+|-------|--------------|---------------|
+| Raspberry Pi 4 (64-bit) | `source env.sh -m raspberrypi4-64` | `bitbake core-image-minimal` |
+| Radxa Dragon Q6A | `source env.sh -m sdradxa-dragon-q6a` | `bitbake sdradxa-image-minimal` |
+
+### 5. Flash to SD card
+
+After the build completes, use the included flash script:
+
+```bash
+# Flash directly from the build output (handles .wic.gz and .wic.bz2)
+sudo ./scripts/flash-sd.sh \
+  -i build/tmp/deploy/images/<machine>/<image>.rootfs.wic.gz \
+  -d /dev/sdX
+```
+
+Or use the prepare + flash workflow:
+
+```bash
+# Decompress the latest image into images/
+./scripts/prepare-image.sh -i <image-name> -m <machine>
+
+# Flash the decompressed image
+sudo ./scripts/flash-sd.sh -i images/<machine>-<timestamp>/<image>.rootfs.wic -d /dev/sdX
+```
+
+> **Important:** Always verify your SD card device with `lsblk` before
+> flashing. The script refuses to write to `/dev/sda`, `/dev/nvme0n1`, and
+> `/dev/vda` as a safety check, but always double-check.
+
+## Generated project structure
+
+After running `setup.sh`, the generated project looks like this:
+
+```
+my-yocto-project/
+    .git/                    # Only if target was a git repo
+    .gitmodules              # Only if target was a git repo (tracks layer commits)
+    .gitignore               # Ignores build/, images/, sstate-cache/, downloads/
+    poky/                    # Yocto build system (submodule or standalone clone)
+    meta-<bsp>/              # BSP layer(s) for the board
+    conf/
+        local.conf           # Build configuration
+        bblayers.conf        # Layer stack
+    scripts/
+        flash-sd.sh          # Flash helper
+        prepare-image.sh     # Image preparation helper
+    env.sh                   # Source this to set up the build environment
+```
+
+## Repository structure
+
+```
+sdyocto-setup-scripts/
+    setup.sh                 # Main entry point
+    boards/
+        raspi/
+            board.conf       # Board metadata (repos, branch, machines)
+            conf/            # Yocto configuration files
+            env.sh           # Environment setup script (copied to project)
+        radxa-dragon-q6a/
+            board.conf
+            conf/
+            env.sh
+    scripts/
+        flash-sd.sh          # Shared flash script (copied to project)
+        prepare-image.sh     # Shared image prep script (copied to project)
+```
+
+## Adding a new board
+
+1. Create a directory under `boards/` with your board ID:
+
+```bash
+mkdir -p boards/my-board/conf
+```
+
+2. Create `boards/my-board/board.conf`:
+
+```bash
+BOARD_NAME="My Custom Board"
+YOCTO_VERSION="scarthgap"
+
+VALID_MACHINES=("my-board-machine")
+DEFAULT_MACHINE="my-board-machine"
+DEFAULT_IMAGE="core-image-minimal"
+
+REPOS=(
+    "poky git://git.yoctoproject.org/poky.git ${YOCTO_VERSION}"
+    "meta-my-bsp https://github.com/example/meta-my-bsp.git ${YOCTO_VERSION}"
+)
+
+WIC_COMPRESSION="gz"
+```
+
+3. Create `boards/my-board/conf/local.conf` and `bblayers.conf` with the
+   appropriate settings for your board.
+
+4. Create `boards/my-board/env.sh` with the valid machines list and default
+   machine. Use an existing board's `env.sh` as a template.
+
+5. Run `./setup.sh -l` to verify your board appears, then test with
+   `./setup.sh -b my-board -p /tmp/test-project`.
+
+## Board-specific notes
+
+### Raspberry Pi
+
+- **Yocto branch:** kirkstone
+- **Machines:** `raspberrypi3`, `raspberrypi3-64`, `raspberrypi4`, `raspberrypi4-64`, `qemux86-64`
+- **Kernel:** linux-raspberrypi (from meta-raspberrypi)
+- **Image format:** `.wic.bz2`
+- UART is enabled by default (`ENABLE_UART = "1"`)
+- U-Boot is used as the bootloader (`RPI_USE_U_BOOT = "1"`)
+- Recommended meta-layer to add as submodule: [meta-sdraspi](https://github.com/sergio24duran/meta-sdraspi)
+
+### Radxa Dragon Q6A
+
+- **Yocto branch:** scarthgap
+- **SoC:** QCS6490 (Snapdragon 7c+ Gen 3)
+- **Machine:** `sdradxa-dragon-q6a`
+- **Kernel:** linux-linaro-qcomlt 6.6 (Qualcomm Landing Team)
+- **Image format:** `.wic.gz`
+- **Meta-layer:** [meta-sdradxa](https://github.com/sergio24duran/meta-sdradxa) — provides machine config, kernel config fragment, image recipe, and wic layout
+- UEFI boots the kernel directly from SD card (no intermediate bootloader)
+- Device tree is provided by UEFI firmware (not compiled into the kernel)
+- Serial console on `ttyMSM0` at 115200 baud
+- See [meta-sdradxa README](https://github.com/sergio24duran/meta-sdradxa) for full build, flash, and troubleshooting documentation
+
+## Prerequisites
+
+- Linux host (Ubuntu, Debian, Fedora, or similar)
+- `git`, `bash`
+- Yocto host dependencies ([Yocto Project Quick Build guide](https://docs.yoctoproject.org/brief-yoctoprojectqs/index.html)):
+
+```bash
+# Ubuntu / Debian
+sudo apt install gawk wget git diffstat unzip texinfo gcc build-essential \
+  chrpath socat cpio python3 python3-pip python3-pexpect xz-utils \
+  debianutils iputils-ping python3-git python3-jinja2 python3-subunit \
+  zstd liblz4-tool file locales libacl1
+sudo locale-gen en_US.UTF-8
+```
+
+- For flashing: `bmaptool` (recommended) or `dd`
+
+```bash
+sudo apt install bmap-tools
+```
+
+## License
+
+MIT. See [LICENSE](LICENSE).
+
+## Author
+
+Sergio Duran Martin

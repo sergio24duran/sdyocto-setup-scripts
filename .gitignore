@@ -1,0 +1,18 @@
+# Yocto build artifacts (in generated projects, not this repo)
+build/
+tmp/
+cache/
+sstate-cache/
+downloads/
+images/
+
+# Editor and IDE files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db

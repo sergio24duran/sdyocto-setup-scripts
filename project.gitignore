@@ -1,0 +1,20 @@
+# Yocto build output
+build/
+
+# Prepared images (from prepare-image.sh)
+images/
+
+# Yocto shared state and downloads (if placed inside the project)
+sstate-cache/
+downloads/
+
+# Editor and IDE files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# OS files
+.DS_Store
+Thumbs.db
