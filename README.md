@@ -28,29 +28,46 @@ cd sdyocto-setup-scripts
 
 ### 3. Create a Yocto project
 
+The script detects automatically whether the target path is a git repository:
+
+- **Git repository detected** (recommended): layers are added as **git
+  submodules**. This gives you full reproducibility — anyone can recreate the
+  exact same project with `git clone --recurse-submodules`.
+- **No git repository**: layers are cloned as standalone repositories. Good for
+  quick tests or throwaway builds.
+
+#### Professional workflow (with submodules)
+
+This is the recommended approach for any project you intend to keep or share:
+
 ```bash
-./setup.sh -b <board> -p /absolute/path/to/new-project
+# 1. Create a repo on GitHub (empty or with a README)
+# 2. Clone it locally
+git clone https://github.com/youruser/my-yocto-project.git
+# 3. Run setup.sh pointing to the cloned repo
+./setup.sh -b radxa-dragon-q6a -p /home/user/my-yocto-project
+# 4. Commit and push
+cd /home/user/my-yocto-project
+git add -A
+git commit -m "Add Yocto layers and configuration for Radxa Dragon Q6A"
+git push
 ```
 
-The script creates the project directory, clones all required Yocto layers
-(Poky, BSP layers, meta-layers), and copies the board-specific configuration
-files and helper scripts.
-
-**Examples:**
+Now anyone can reproduce your project:
 
 ```bash
-# Raspberry Pi
+git clone --recurse-submodules https://github.com/youruser/my-yocto-project.git
+```
+
+#### Quick start (standalone clones)
+
+For fast experiments where reproducibility is not needed:
+
+```bash
 ./setup.sh -b raspi -p /home/user/yocto-raspi
-
-# Radxa Dragon Q6A
-./setup.sh -b radxa-dragon-q6a -p /home/user/yocto-radxa
 ```
 
-**Using git submodules** (useful if the project directory is itself a git repo):
-
-```bash
-./setup.sh -b radxa-dragon-q6a -p /home/user/yocto-radxa -g
-```
+The directory does not need to exist — the script creates it.
 
 ### 4. Build
 
@@ -99,7 +116,10 @@ After running `setup.sh`, the generated project looks like this:
 
 ```
 my-yocto-project/
-    poky/                    # Yocto build system
+    .git/                    # Only if target was a git repo
+    .gitmodules              # Only if target was a git repo (tracks layer commits)
+    .gitignore               # Ignores build/, images/, sstate-cache/, downloads/
+    poky/                    # Yocto build system (submodule or standalone clone)
     meta-<bsp>/              # BSP layer(s) for the board
     conf/
         local.conf           # Build configuration

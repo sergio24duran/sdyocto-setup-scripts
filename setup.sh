@@ -3,20 +3,21 @@ set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BOARDS_DIR="${SCRIPT_DIR}/boards"
-USE_GIT_SUBMODULES=false
 
 # ================================
 # HELP
 # ================================
 usage() {
-    echo "Usage: $0 -b <board> -p /absolute/path/to/project [-g]"
+    echo "Usage: $0 -b <board> -p /absolute/path/to/project"
     echo ""
     echo "Options:"
     echo "  -b <board>   Board to set up (required)"
-    echo "  -p <path>    Absolute path for the new Yocto project (required)"
-    echo "  -g           Use git submodules instead of git clone"
+    echo "  -p <path>    Absolute path for the Yocto project (required)"
     echo "  -l           List available boards"
     echo "  -h           Show this help"
+    echo ""
+    echo "If the target path is a git repository, layers are added as submodules."
+    echo "Otherwise, layers are cloned as standalone repositories."
     exit 1
 }
 
@@ -41,11 +42,10 @@ list_boards() {
 BOARD=""
 PROJECT_PATH=""
 
-while getopts ":b:p:glh" opt; do
+while getopts ":b:p:lh" opt; do
     case "${opt}" in
         b) BOARD="$OPTARG" ;;
         p) PROJECT_PATH="$OPTARG" ;;
-        g) USE_GIT_SUBMODULES=true ;;
         l) list_boards ;;
         h) usage ;;
         \?) echo "Unknown option: -${OPTARG}"; usage ;;
@@ -88,34 +88,50 @@ if [[ "${PROJECT_PATH}" != /* ]]; then
     exit 1
 fi
 
+# ================================
+# DETECT MODE: submodules (git repo) or standalone clones
+# ================================
+CREATED_DIR=false
+USE_SUBMODULES=false
+
 if [[ -d "${PROJECT_PATH}" ]]; then
-    echo "Error: directory already exists: ${PROJECT_PATH}"
-    exit 1
+    if git -C "${PROJECT_PATH}" rev-parse --is-inside-work-tree &>/dev/null; then
+        USE_SUBMODULES=true
+    fi
+else
+    echo "Creating project directory..."
+    mkdir -p "${PROJECT_PATH}"
+    CREATED_DIR=true
 fi
 
-# ================================
-# CREATE PROJECT DIRECTORY
-# ================================
-echo "Creating project directory..."
-mkdir -p "${PROJECT_PATH}"
 cd "${PROJECT_PATH}" || { echo "Error: failed to cd into ${PROJECT_PATH}"; exit 1; }
 
-# Clean up on failure so the user can retry without manually removing the directory
-cleanup() {
-    echo ""
-    echo "Error: setup failed. Cleaning up ${PROJECT_PATH}..."
-    rm -rf "${PROJECT_PATH}"
-    exit 1
-}
-trap cleanup ERR
+if [[ "${USE_SUBMODULES}" == true ]]; then
+    echo "Mode:    git submodules (git repository detected)"
+else
+    echo "Mode:    standalone clones (no git repository)"
+fi
+echo ""
+
+# Clean up on failure — only remove the directory if we created it
+if [[ "${CREATED_DIR}" == true ]]; then
+    cleanup() {
+        echo ""
+        echo "Error: setup failed. Cleaning up ${PROJECT_PATH}..."
+        rm -rf "${PROJECT_PATH}"
+        exit 1
+    }
+    trap cleanup ERR
+else
+    trap 'echo ""; echo "Error: setup failed. Review the contents of ${PROJECT_PATH}."; exit 1' ERR
+fi
 
 # ================================
 # CLONE OR ADD SUBMODULES
 # ================================
-# Copy .gitignore for the generated project
 cp "${SCRIPT_DIR}/project.gitignore" "${PROJECT_PATH}/.gitignore"
 
-if [[ "${USE_GIT_SUBMODULES}" == true ]]; then
+if [[ "${USE_SUBMODULES}" == true ]]; then
     echo "Adding git submodules..."
 
     for repo_entry in "${REPOS[@]}"; do
@@ -168,7 +184,23 @@ echo ""
 echo "Project ready at: ${PROJECT_PATH}"
 echo ""
 echo "Next steps:"
+
+if [[ "${USE_SUBMODULES}" == true ]]; then
+    echo "  cd ${PROJECT_PATH}"
+    echo "  git add -A"
+    echo "  git commit -m \"Add Yocto layers and configuration for ${BOARD_NAME}\""
+    echo "  git push"
+    echo ""
+    echo "To build:"
+fi
+
 echo "  cd ${PROJECT_PATH}"
 echo "  source env.sh -m ${DEFAULT_MACHINE}"
 echo "  bitbake ${DEFAULT_IMAGE}"
 echo ""
+
+if [[ "${USE_SUBMODULES}" == true ]]; then
+    echo "To reproduce this project on another machine:"
+    echo "  git clone --recurse-submodules <your-repo-url>"
+    echo ""
+fi
