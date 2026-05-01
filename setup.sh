@@ -112,9 +112,11 @@ trap cleanup ERR
 # ================================
 # CLONE OR ADD SUBMODULES
 # ================================
+# Copy .gitignore for the generated project
+cp "${SCRIPT_DIR}/project.gitignore" "${PROJECT_PATH}/.gitignore"
+
 if [[ "${USE_GIT_SUBMODULES}" == true ]]; then
     echo "Adding git submodules..."
-    echo "build/" > .gitignore
 
     for repo_entry in "${REPOS[@]}"; do
         read -r name url branch <<< "${repo_entry}"
