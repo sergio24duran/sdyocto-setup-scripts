@@ -100,6 +100,15 @@ echo "Creating project directory..."
 mkdir -p "${PROJECT_PATH}"
 cd "${PROJECT_PATH}" || { echo "Error: failed to cd into ${PROJECT_PATH}"; exit 1; }
 
+# Clean up on failure so the user can retry without manually removing the directory
+cleanup() {
+    echo ""
+    echo "Error: setup failed. Cleaning up ${PROJECT_PATH}..."
+    rm -rf "${PROJECT_PATH}"
+    exit 1
+}
+trap cleanup ERR
+
 # ================================
 # CLONE OR ADD SUBMODULES
 # ================================
