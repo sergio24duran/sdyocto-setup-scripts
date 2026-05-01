@@ -4,22 +4,26 @@ set -euo pipefail
 # Flash a .wic image (or compressed .wic.gz / .wic.bz2) to an SD card.
 # Uses bmaptool when available, falls back to dd.
 
+AUTO_YES=false
+
 usage() {
-    echo "Usage: $0 -i <image> -d <device>"
+    echo "Usage: $0 -i <image> -d <device> [-y]"
     echo ""
     echo "  -i   Path to .wic, .wic.gz, or .wic.bz2 image"
     echo "  -d   Target block device (e.g. /dev/sdc)"
+    echo "  -y   Auto-accept all prompts (skip confirmations)"
     echo ""
     echo "Examples:"
     echo "  $0 -i build/tmp/deploy/images/*/my-image.rootfs.wic.gz -d /dev/sdc"
-    echo "  $0 -i images/my-image.rootfs.wic -d /dev/sdc"
+    echo "  $0 -i build/tmp/deploy/images/*/my-image.rootfs.wic.gz -d /dev/sdc -y"
     exit 1
 }
 
-while getopts "i:d:h" opt; do
+while getopts "i:d:yh" opt; do
     case $opt in
         i) IMAGE="$OPTARG" ;;
         d) SD_DEVICE="$OPTARG" ;;
+        y) AUTO_YES=true ;;
         h) usage ;;
         *) usage ;;
     esac
@@ -51,10 +55,12 @@ echo ""
 echo "Image:  $IMAGE"
 echo "Device: $SD_DEVICE"
 echo ""
-read -rp "This will ERASE all data on ${SD_DEVICE}. Continue? (yes/no): " CONFIRM
-if [[ "$CONFIRM" != "yes" ]]; then
-    echo "Cancelled."
-    exit 1
+if [[ "$AUTO_YES" != true ]]; then
+    read -rp "This will ERASE all data on ${SD_DEVICE}. Continue? (yes/no): " CONFIRM
+    if [[ "$CONFIRM" != "yes" ]]; then
+        echo "Cancelled."
+        exit 1
+    fi
 fi
 
 # Unmount any mounted partitions
@@ -107,7 +113,12 @@ elif [[ -b "${SD_DEVICE}p2" ]]; then
 fi
 
 if [[ -n "$ROOTFS_PART" ]]; then
-    read -rp "Expand rootfs partition to fill the SD card? (yes/no): " EXPAND
+    EXPAND="no"
+    if [[ "$AUTO_YES" == true ]]; then
+        EXPAND="yes"
+    else
+        read -rp "Expand rootfs partition to fill the SD card? (yes/no): " EXPAND
+    fi
     if [[ "$EXPAND" == "yes" ]]; then
         echo "Expanding ${ROOTFS_PART}..."
         sudo e2fsck -f -y "$ROOTFS_PART"
